@@ -3,78 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>手势切水果 (国内极速版)</title>
+    <title>手势切水果 (刀光修复版)</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #1a1a1a; font-family: 'Microsoft YaHei', sans-serif; user-select: none; }
-        #game-container { position: relative; width: 100vw; height: 100vh; background: radial-gradient(circle, #2b2b2b 0%, #000000 100%); }
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Microsoft YaHei', sans-serif; user-select: none; }
         
-        /* 3D 游戏画布 */
-        #game-canvas { display: block; width: 100%; height: 100%; }
+        /* 游戏背景 */
+        #game-container { 
+            position: relative; width: 100vw; height: 100vh; 
+            background: radial-gradient(circle at center, #1a1a2e 0%, #000000 100%); 
+        }
         
-        /* 右下角摄像头反馈 */
+        #game-canvas { display: block; width: 100%; height: 100%; cursor: none; /* 隐藏鼠标，完全靠手势 */ }
+        
+        /* 摄像头小窗 */
         #cam-wrapper {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            width: 200px;
-            height: 150px;
-            border: 2px solid #00ffcc;
-            border-radius: 8px;
-            overflow: hidden;
-            background: #000;
-            z-index: 10;
-            transform: scaleX(-1); /* 镜像 */
+            position: absolute; bottom: 20px; right: 20px;
+            width: 200px; height: 150px;
+            border: 2px solid #00ffcc; border-radius: 8px;
+            overflow: hidden; background: #000; z-index: 10;
+            transform: scaleX(-1);
             box-shadow: 0 0 15px rgba(0, 255, 204, 0.3);
+            opacity: 0.8;
         }
-        #cam-video { display: none; }
-        #debug-canvas { width: 100%; height: 100%; object-fit: cover; opacity: 0.8; }
+        #input-video { display: none; }
+        #debug-canvas { width: 100%; height: 100%; object-fit: cover; }
 
-        /* UI 界面 */
+        /* UI 层 */
         #ui-layer {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: flex; flex-direction: column; align-items: center;
         }
+        
         #score-board {
-            margin-top: 30px;
-            font-size: 60px;
-            color: white;
-            text-shadow: 0 0 20px #ff00de, 2px 2px 0px #000;
-            font-weight: 800;
-            display: none;
-            transition: transform 0.1s;
+            margin-top: 20px; font-size: 80px; color: #fff;
+            text-shadow: 0 0 10px #00ffcc, 4px 4px 0px #000;
+            font-weight: 800; display: none; transition: transform 0.1s;
+            z-index: 5;
         }
-        .score-pop { transform: scale(1.5); }
+        .score-pop { transform: scale(1.3); }
         
         #message {
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 28px;
-            color: #fff;
-            background: rgba(0, 0, 0, 0.85);
-            padding: 30px 50px;
-            border-radius: 20px;
-            text-align: center;
-            border: 2px solid #00ffcc;
-            box-shadow: 0 0 30px rgba(0, 255, 204, 0.2);
-            line-height: 1.6;
+            position: absolute; top: 15%;
+            font-size: 24px; color: #fff; background: rgba(0, 0, 0, 0.6);
+            padding: 20px 40px; border-radius: 20px; text-align: center;
+            border: 2px solid #00ffcc; box-shadow: 0 0 30px rgba(0, 255, 204, 0.2);
+            line-height: 1.6; z-index: 20;
+            backdrop-filter: blur(5px);
         }
-        .loading { color: #ffff00; }
-        .tips { font-size: 16px; color: #aaa; margin-top: 10px; }
+        .loading-text { color: #ffff00; font-weight: bold; font-size: 28px; }
+        .tips { font-size: 16px; color: #ccc; margin-top: 10px; }
     </style>
 
-    <!-- 使用国内 CDN (BootCDN & Elemecdn) -->
-    <!-- MediaPipe 依赖 -->
-    <script src="https://npm.elemecdn.com/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://npm.elemecdn.com/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
-    <script src="https://npm.elemecdn.com/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://npm.elemecdn.com/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-    <!-- Three.js -->
+    <!-- 1. Three.js -->
     <script src="https://cdn.bootcdn.net/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- 2. MediaPipe Hands -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -82,466 +66,468 @@
     <canvas id="game-canvas"></canvas>
     <div id="ui-layer">
         <div id="score-board">0</div>
-        <div id="message" class="loading">
-            <div>🚀 正在加载 AI 模型...</div>
-            <div class="tips">首次加载可能需要几秒钟<br>请允许摄像头权限</div>
+        <div id="message">
+            <div class="loading-text">⚔️ 正在初始化光剑...</div>
+            <div class="tips">请允许摄像头权限<br>加载完成后，挥动手指</div>
         </div>
     </div>
     
     <div id="cam-wrapper">
-        <video id="cam-video"></video>
+        <video id="input-video" playsinline></video>
         <canvas id="debug-canvas" width="640" height="480"></canvas>
     </div>
 </div>
 
 <script>
-/**
- * 1. 音效系统 (Web Audio API - 无需外部文件)
- */
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+// --- 0. 全局配置 ---
+const CFG = {
+    trailLength: 20, // 拖尾长度
+    trailWidth: 1.5, // 拖尾宽度
+    sensitivity: 2.5 // 手势移动灵敏度
+};
 
+// --- 1. 音效系统 ---
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 const SoundFX = {
-    play: (freq, type, duration, vol=0.1) => {
+    play: (freq, type, dur, vol=0.1) => {
         if(audioCtx.state === 'suspended') audioCtx.resume();
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-        // 音量包络
+        osc.type = type; osc.frequency.value = freq;
         gain.gain.setValueAtTime(vol, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + duration);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + dur);
     },
     cut: () => {
-        // 模拟挥刀/切开的嗖嗖声
-        SoundFX.play(600 + Math.random()*200, 'sawtooth', 0.15, 0.1);
-        SoundFX.play(1000 + Math.random()*500, 'sine', 0.1, 0.05);
+        SoundFX.play(800+Math.random()*400, 'sawtooth', 0.1, 0.1);
+        SoundFX.play(100, 'sine', 0.2, 0.1); // 低音打击感
     },
+    start: () => { SoundFX.play(440, 'sine', 0.1); setTimeout(()=>SoundFX.play(880, 'sine', 0.3), 100); },
+    bad: () => SoundFX.play(150, 'square', 0.4, 0.15),
     bomb: () => {
         if(audioCtx.state === 'suspended') audioCtx.resume();
-        const bufferSize = audioCtx.sampleRate * 0.5;
-        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i/(bufferSize/5));
-        const noise = audioCtx.createBufferSource();
-        noise.buffer = buffer;
-        const gain = audioCtx.createGain();
-        gain.gain.setValueAtTime(1, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-        noise.connect(gain);
-        gain.connect(audioCtx.destination);
-        noise.start();
-    },
-    start: () => {
-        SoundFX.play(440, 'sine', 0.1);
-        setTimeout(()=> SoundFX.play(554, 'sine', 0.1), 100);
-        setTimeout(()=> SoundFX.play(659, 'sine', 0.2), 200);
-    },
-    bad: () => SoundFX.play(100, 'sawtooth', 0.4, 0.2)
+        const b = audioCtx.createBuffer(1, 22050, 44100);
+        const d = b.getChannelData(0);
+        for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
+        const s = audioCtx.createBufferSource(); s.buffer=b;
+        const g = audioCtx.createGain(); g.gain.value=1;
+        s.connect(g); g.connect(audioCtx.destination); s.start();
+    }
 };
 
-/**
- * 2. Three.js 场景与渲染
- */
+// --- 2. Three.js 场景 ---
 const canvas = document.getElementById('game-canvas');
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.z = 8; // 稍微拉远一点
+// 稍微调大远裁剪面
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 100);
+camera.position.z = 10; 
 
-const renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 
 // 灯光
-scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-dirLight.position.set(5, 10, 7);
-scene.add(dirLight);
+scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+const pointLight = new THREE.PointLight(0xffffff, 1, 100);
+pointLight.position.set(0, 10, 10);
+scene.add(pointLight);
 
-/**
- * 3. 游戏核心逻辑
- */
-let gameState = 'MENU'; 
+// --- 3. 游戏状态变量 ---
+let gameState = 'MENU';
 let score = 0;
-let handPos = new THREE.Vector3(0, -20, 0); // 初始在屏幕外
+// 逻辑手位置 (Z=0, 用于碰撞检测)
+let handPos = new THREE.Vector3(0, -20, 0); 
 let isHandActive = false;
-let screenShake = 0;
+let items = [];
+let particles = [];
+let spawnTimer = null;
+let shake = 0;
 
-// --- 刀光轨迹 (Glowing Trail) ---
-const TRAIL_LENGTH = 12;
-const trailPoints = [];
-const trailGeo = new THREE.BufferGeometry();
-// 使用带顶点的 Line 无法做宽度变化，这里用简单的线，靠粒子补足特效
-const trailMat = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 3 }); 
-// 注意：Windows Chrome 不支持 linewidth > 1，所以主要靠粒子和视觉暂留
-const trailMesh = new THREE.Line(trailGeo, trailMat);
-// 预填充
-for(let i=0; i<TRAIL_LENGTH; i++) trailPoints.push(new THREE.Vector3(0,-20,0));
-scene.add(trailMesh);
+// --- 4. 关键修复：光剑与拖尾系统 ---
 
-function updateTrail(pos) {
-    trailPoints.shift();
-    trailPoints.push(pos.clone());
+// (A) 指尖光标 (Cursor) - 让你知道手指在哪
+const cursorGeo = new THREE.SphereGeometry(0.3, 16, 16);
+const cursorMat = new THREE.MeshBasicMaterial({ 
+    color: 0xffffff, 
+    transparent: true, 
+    opacity: 0.9 
+});
+const cursorMesh = new THREE.Mesh(cursorGeo, cursorMat);
+// 添加一个光晕
+const glowGeo = new THREE.PlaneGeometry(1.5, 1.5);
+// 简单的光晕贴图生成
+const glowCanvas = document.createElement('canvas');
+glowCanvas.width=64; glowCanvas.height=64;
+const gCtx = glowCanvas.getContext('2d');
+const grd = gCtx.createRadialGradient(32,32,0, 32,32,32);
+grd.addColorStop(0, 'rgba(0, 255, 255, 0.8)');
+grd.addColorStop(1, 'rgba(0, 255, 255, 0)');
+gCtx.fillStyle = grd; gCtx.fillRect(0,0,64,64);
+const glowTex = new THREE.CanvasTexture(glowCanvas);
+const glowMesh = new THREE.Mesh(glowGeo, new THREE.MeshBasicMaterial({
+    map: glowTex, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false
+}));
+cursorMesh.add(glowMesh);
+scene.add(cursorMesh);
+
+// (B) 刀光拖尾 (Blade Trail) - 使用粒子流替代 Line
+const bladeParticles = [];
+const bladeGeo = new THREE.PlaneGeometry(0.4, 0.4); // 刀光粒子大小
+const bladeTex = glowTex; // 复用光晕贴图
+
+function spawnBladeParticle(pos) {
+    const mat = new THREE.MeshBasicMaterial({
+        map: bladeTex,
+        color: 0x00ffff, // 青色刀光
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        opacity: 0.8
+    });
+    const mesh = new THREE.Mesh(bladeGeo, mat);
+    // 视觉位置在 Z=1，保证覆盖在地球上方
+    mesh.position.set(pos.x, pos.y, 1); 
+    // 随机旋转增加自然感
+    mesh.rotation.z = Math.random() * Math.PI;
+    scene.add(mesh);
     
-    // 平滑处理
-    const points = [];
-    for(let i=0; i<trailPoints.length; i++) {
-        points.push(trailPoints[i]);
-    }
-    trailGeo.setFromPoints(points);
-    
-    // 刀光粒子 (在刀尖生成)
-    if(isHandActive) {
-        spawnParticle(pos, 0x00ffff, 2, 0.5); 
-    }
+    bladeParticles.push({
+        mesh: mesh,
+        life: 1.0, // 存活时间
+        decay: 0.08 // 消失速度 (越小拖尾越长)
+    });
 }
 
-// --- 粒子系统 (爆浆特效) ---
-const particles = [];
-const particleGeo = new THREE.BoxGeometry(0.15, 0.15, 0.15); // 小方块
-
-function spawnParticle(pos, color, count, speedMult=1.0) {
-    const mat = new THREE.MeshPhongMaterial({ color: color, shininess: 100 });
-    for(let i=0; i<count; i++) {
-        const mesh = new THREE.Mesh(particleGeo, mat);
-        mesh.position.copy(pos);
-        // 随机爆炸速度
-        const vel = new THREE.Vector3(
-            (Math.random() - 0.5) * 0.5 * speedMult,
-            (Math.random() - 0.5) * 0.5 * speedMult,
-            (Math.random() - 0.5) * 0.5 * speedMult
-        );
-        scene.add(mesh);
-        particles.push({ mesh, vel, life: 1.0 });
+function updateBlade() {
+    // 1. 更新光标位置
+    if (isHandActive) {
+        cursorMesh.position.set(handPos.x, handPos.y, 1);
+        cursorMesh.visible = true;
+        // 产生拖尾粒子
+        spawnBladeParticle(handPos);
+        // 如果移动很快，在上一帧和当前帧之间插值补点，防止断裂
+        // (简单版略过插值，只要帧率够高通常没问题)
+    } else {
+        cursorMesh.visible = false;
     }
-}
 
-function updateParticles() {
-    for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
-        p.life -= 0.02; // 寿命衰减
+    // 2. 更新所有拖尾粒子
+    for (let i = bladeParticles.length - 1; i >= 0; i--) {
+        const p = bladeParticles[i];
+        p.life -= p.decay;
         
-        p.vel.y -= 0.015; // 重力
-        p.mesh.position.add(p.vel);
-        p.mesh.rotation.x += p.vel.z;
-        p.mesh.rotation.y += p.vel.x;
-        
-        p.mesh.scale.setScalar(p.life); // 变小
-        
+        // 粒子缩小
+        const scale = p.life * 1.5;
+        p.mesh.scale.set(scale, scale, 1);
+        p.mesh.material.opacity = p.life;
+
         if (p.life <= 0) {
             scene.remove(p.mesh);
-            particles.splice(i, 1);
+            bladeParticles.splice(i, 1);
         }
     }
 }
 
-// --- 生成 Emoji 纹理 ---
-const textureCache = {};
-function getEmojiSprite(emoji, size=128) {
-    if(textureCache[emoji]) return textureCache[emoji].clone();
-    
-    const cvs = document.createElement('canvas');
-    cvs.width = size; cvs.height = size;
-    const ctx = cvs.getContext('2d');
-    ctx.font = `${size*0.8}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(emoji, size/2, size/2 + size*0.05); // 微调垂直居中
-    
-    const tex = new THREE.CanvasTexture(cvs);
-    const mat = new THREE.SpriteMaterial({ map: tex });
-    const sprite = new THREE.Sprite(mat);
-    textureCache[emoji] = sprite;
-    return sprite.clone();
+// --- 5. 爆炸粒子系统 (切水果特效) ---
+const pGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+function spawnExplosion(pos, color, count, speed=1) {
+    const mat = new THREE.MeshBasicMaterial({ color: color });
+    for(let i=0; i<count; i++){
+        const m = new THREE.Mesh(pGeo, mat);
+        m.position.copy(pos);
+        scene.add(m);
+        particles.push({
+            mesh: m,
+            vel: new THREE.Vector3((Math.random()-0.5)*speed, (Math.random()-0.5)*speed, (Math.random()-0.5)*speed),
+            life: 1.0
+        });
+    }
 }
 
-// --- 游戏物体 ---
-class GameItem {
+// --- 6. 生成 Emoji 贴图 ---
+const texCache = {};
+function getSprite(emoji) {
+    if(!texCache[emoji]){
+        const c = document.createElement('canvas'); c.width=128; c.height=128;
+        const ctx = c.getContext('2d');
+        ctx.font = '95px Arial'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(emoji, 64, 70);
+        texCache[emoji] = new THREE.CanvasTexture(c);
+    }
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texCache[emoji] }));
+    s.scale.set(2, 2, 1); 
+    return s;
+}
+
+// --- 7. 游戏物体类 ---
+class Item {
     constructor(type) {
-        this.type = type; 
-        this.active = true;
-        this.radius = 1.0;
+        this.type = type; this.active = true;
         
-        if (type === 'start') {
-            this.obj = new THREE.Group();
-            
+        if(type==='start'){
+            this.mesh = new THREE.Group();
             // 地球网格
-            const g = new THREE.SphereGeometry(1, 16, 16);
-            const m = new THREE.MeshPhongMaterial({ color: 0x0066ff, wireframe: true, emissive: 0x001133 });
-            this.mesh = new THREE.Mesh(g, m);
-            this.obj.add(this.mesh);
-            
-            // 🌏 图标
-            const s = getEmojiSprite('🌏');
-            s.scale.set(1.5, 1.5, 1);
-            this.obj.add(s);
-            
-            this.obj.position.set(0, 0, 0);
-            this.vel = new THREE.Vector3(0,0,0);
-            
+            const globe = new THREE.Mesh(
+                new THREE.SphereGeometry(1.5, 16, 16), 
+                new THREE.MeshBasicMaterial({color:0x00aaff, wireframe:true, transparent:true, opacity:0.5})
+            );
+            this.mesh.add(globe);
+            // 图标
+            const s = getSprite('🌏');
+            s.scale.set(3,3,1);
+            this.mesh.add(s);
+            this.mesh.position.set(0, 0, 0); // 放在 Z=0
+            this.vel = new THREE.Vector3();
         } else {
-            let char = '🍉';
-            if(type === 'poop') char = '💩';
-            if(type === 'bomb') char = '💣';
-            
-            this.obj = getEmojiSprite(char);
-            this.obj.scale.set(1.8, 1.8, 1);
+            const char = type==='melon'?'🍉':(type==='poop'?'💩':'💣');
+            this.mesh = getSprite(char);
             
             // 抛射逻辑
-            const x = (Math.random() - 0.5) * 8; // -4 到 4
-            this.obj.position.set(x, -6, 0);
+            const startX = (Math.random() - 0.5) * 10;
+            this.mesh.position.set(startX, -8, 0); // 从屏幕下方生成
             
-            // 抛物线速度：X轴向中心靠拢，Y轴向上
-            const speedX = -x * 0.15 + (Math.random()-0.5)*0.5;
-            const speedY = 0.22 + Math.random() * 0.08;
-            this.vel = new THREE.Vector3(speedX, speedY, 0);
+            // 向中心抛射
+            const velX = -startX * 0.12 + (Math.random()-0.5); 
+            const velY = 0.25 + Math.random() * 0.05;
+            this.vel = new THREE.Vector3(velX, velY, 0);
         }
-        
-        scene.add(this.obj);
+        scene.add(this.mesh);
     }
 
     update() {
         if(!this.active) return;
-
-        // 旋转
-        if(this.type === 'start') {
-            this.mesh.rotation.y += 0.02;
-            this.mesh.rotation.z += 0.01;
+        
+        if(this.type==='start') {
+            this.mesh.rotation.y += 0.01;
+            this.mesh.rotation.z += 0.005;
         } else {
-            // 物理运动
-            this.obj.position.add(this.vel);
+            this.mesh.position.add(this.vel);
             this.vel.y -= 0.005; // 重力
-            // 边界销毁
-            if(this.obj.position.y < -10) this.remove();
+            this.mesh.rotation.z += 0.05; // 旋转 Sprite
+            if(this.mesh.position.y < -12) this.remove();
         }
 
-        // 切割检测
+        // 碰撞检测
         if(isHandActive) {
-            const dist = this.obj.position.distanceTo(handPos);
-            // 简单的距离判定，如果速度快可以加射线检测，但这里每帧检测也够用了
-            if(dist < this.radius) {
-                this.slice();
+            // 计算距离 (忽略 Z 轴差异，只看平面投影)
+            const dist = Math.hypot(this.mesh.position.x - handPos.x, this.mesh.position.y - handPos.y);
+            // 判定半径
+            const hitRadius = this.type === 'start' ? 1.8 : 1.2;
+            
+            if(dist < hitRadius) {
+                this.hit();
             }
         }
     }
 
-    slice() {
-        this.active = false;
-        
-        // 视觉震动
-        screenShake = 0.3;
-
-        if (this.type === 'start') {
-            SoundFX.start();
-            spawnParticle(this.obj.position, 0x0088ff, 30, 2);
-            startGame();
-        } else if (this.type === 'melon') {
-            SoundFX.cut();
-            addScore(10);
-            spawnParticle(this.obj.position, 0xff0000, 20, 1.5); // 红色果汁
-            spawnParticle(this.obj.position, 0x00ff00, 5, 1);    // 绿色瓜皮
-        } else if (this.type === 'poop') {
-            SoundFX.bad();
-            addScore(-10);
-            spawnParticle(this.obj.position, 0x8B4513, 25, 1.2); // 褐色
-        } else if (this.type === 'bomb') {
-            SoundFX.bomb();
-            spawnParticle(this.obj.position, 0xffaa00, 50, 3); // 爆炸火花
-            spawnParticle(this.obj.position, 0x555555, 30, 2); // 烟雾
-            endGame();
+    hit() {
+        this.remove(); shake = 0.4;
+        if(this.type==='start') { 
+            SoundFX.start(); 
+            spawnExplosion(this.mesh.position, 0x00aaff, 50, 2); 
+            startGame(); 
         }
-        
-        this.remove();
+        else if(this.type==='melon') { 
+            SoundFX.cut(); score+=10; uiScore(); 
+            spawnExplosion(this.mesh.position, 0xff0000, 20); 
+        }
+        else if(this.type==='poop') { 
+            SoundFX.bad(); score-=10; uiScore(); 
+            spawnExplosion(this.mesh.position, 0x8B4513, 20); 
+        }
+        else if(this.type==='bomb') { 
+            SoundFX.bomb(); 
+            spawnExplosion(this.mesh.position, 0xffaa00, 60, 3); 
+            endGame(); 
+        }
     }
 
-    remove() {
-        scene.remove(this.obj);
-        this.active = false;
-    }
+    remove() { this.active=false; scene.remove(this.mesh); }
 }
 
-let items = [];
-let spawnTimer = null;
-
-function addScore(val) {
-    score += val;
+// --- 8. UI 控制 ---
+function uiScore() {
     const el = document.getElementById('score-board');
-    el.innerText = score;
-    el.classList.remove('score-pop');
-    void el.offsetWidth; // trigger reflow
-    el.classList.add('score-pop');
-    if(score < 0) score = 0;
+    el.innerText = Math.max(0, score);
+    el.classList.remove('score-pop'); void el.offsetWidth; el.classList.add('score-pop');
 }
 
 function initMenu() {
-    gameState = 'MENU';
-    items.forEach(i => i.remove());
-    items = [];
-    items.push(new GameItem('start'));
+    gameState='MENU'; items.forEach(i=>i.remove()); items=[];
+    items.push(new Item('start'));
     
     const msg = document.getElementById('message');
-    msg.innerHTML = `<div>🖐️ 伸出食指切碎地球开始</div><div class="tips">🍉 +10 分 | 💩 -10 分 | 💣 游戏结束</div>`;
-    msg.style.display = 'block';
-    document.getElementById('score-board').style.display = 'none';
+    msg.style.display='block';
+    msg.innerHTML = `
+        <div style="font-size:32px;color:#00ffcc;font-weight:bold;">🖐️ 准备就绪</div>
+        <div style="margin:10px 0;">挥动光标切碎中间的地球</div>
+        <div class="tips">🍉 +10 | 💩 -10 | 💣 结束</div>
+    `;
+    document.getElementById('score-board').style.display='none';
 }
 
 function startGame() {
-    gameState = 'PLAYING';
-    score = 0;
-    document.getElementById('score-board').innerText = "0";
-    document.getElementById('score-board').style.display = 'block';
-    document.getElementById('message').style.display = 'none';
-    
+    gameState='PLAYING'; score=0; uiScore();
+    document.getElementById('message').style.display='none';
+    document.getElementById('score-board').style.display='block';
     if(spawnTimer) clearInterval(spawnTimer);
-    spawnTimer = setInterval(() => {
-        if(gameState !== 'PLAYING') return;
-        
+    
+    // 难度递增逻辑
+    spawnTimer = setInterval(()=>{
+        if(gameState!=='PLAYING') return;
         const r = Math.random();
-        if(r < 0.1) items.push(new GameItem('bomb'));
-        else if(r < 0.3) items.push(new GameItem('poop'));
-        else items.push(new GameItem('melon'));
-        
-    }, 900);
+        // 10% 炸弹, 20% 粑粑, 70% 西瓜
+        items.push(new Item(r<0.1?'bomb':(r<0.3?'poop':'melon')));
+    }, 750);
 }
 
 function endGame() {
-    gameState = 'GAMEOVER';
-    clearInterval(spawnTimer);
-    
-    // 清除所有物体
-    items.forEach(i => i.remove());
-    items = [];
-
+    gameState='GAMEOVER'; clearInterval(spawnTimer);
+    items.forEach(i=>i.remove()); items=[];
     const msg = document.getElementById('message');
-    msg.innerHTML = `<div style="color:#ff3333">💥 游戏结束 💥</div><div style="font-size:40px;margin:20px 0">${score} 分</div><div class="tips">稍等片刻自动重置</div>`;
-    msg.style.display = 'block';
-
-    setTimeout(() => {
-        initMenu();
-    }, 3000);
+    msg.innerHTML = `<div style="color:#ff4444;font-size:48px">💥 游戏结束</div><div>得分: ${score}</div><div class="tips">3秒后自动重启</div>`;
+    msg.style.display='block';
+    setTimeout(initMenu, 3000);
 }
 
-/**
- * 4. MediaPipe 手势识别配置 (使用 Elemecdn)
- */
-const videoElement = document.getElementById('cam-video');
-const debugCanvas = document.getElementById('debug-canvas');
-const debugCtx = debugCanvas.getContext('2d');
+// --- 9. 鼠标辅助 (Debug用) ---
+// 为了防止手势识别在某些光线下失灵，保留鼠标点击作为备用
+window.addEventListener('mousedown', (e) => {
+    const x = (e.clientX / innerWidth) * 2 - 1;
+    const y = -(e.clientY / innerHeight) * 2 + 1;
+    const vec = new THREE.Vector3(x, y, 0.5);
+    vec.unproject(camera);
+    const dir = vec.sub(camera.position).normalize();
+    const distance = -camera.position.z / dir.z; // 投影到 Z=0
+    const pos = camera.position.clone().add(dir.multiplyScalar(distance));
+    
+    handPos.copy(pos);
+    isHandActive = true;
+    setTimeout(() => { isHandActive = false; }, 100);
+});
 
-function onHandResults(results) {
-    // 绘制调试画面
+// --- 10. MediaPipe Hands 视觉识别 ---
+const video = document.getElementById('input-video');
+const debugCtx = document.getElementById('debug-canvas').getContext('2d');
+
+let hands;
+try {
+    hands = new Hands({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+    hands.setOptions({
+        maxNumHands: 1, 
+        modelComplexity: 1, 
+        minDetectionConfidence: 0.5, 
+        minTrackingConfidence: 0.5
+    });
+    hands.onResults(onResults);
+} catch (e) {
+    document.querySelector('.loading-text').innerText = "AI 组件加载失败";
+}
+
+function onResults(results) {
+    // 绘制摄像头小窗
     debugCtx.save();
-    debugCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height);
-    // 绘制视频帧
-    debugCtx.drawImage(results.image, 0, 0, debugCanvas.width, debugCanvas.height);
+    debugCtx.clearRect(0, 0, 640, 480);
+    debugCtx.drawImage(results.image, 0, 0, 640, 480);
     
     isHandActive = false;
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         const landmarks = results.multiHandLandmarks[0];
+        const tip = landmarks[8]; // 食指尖
         
-        // 绘制骨架
-        drawConnectors(debugCtx, landmarks, HAND_CONNECTIONS, {color: '#00ffcc', lineWidth: 2});
-        
-        // 获取食指指尖 (Index 8)
-        const tip = landmarks[8];
-        drawLandmarks(debugCtx, [tip], {color: '#ff00de', lineWidth: 2, radius: 5});
+        // 在小窗绘制绿点
+        debugCtx.fillStyle = '#00ff00';
+        debugCtx.beginPath(); debugCtx.arc(tip.x*640, tip.y*480, 10, 0, 2*Math.PI); debugCtx.fill();
 
-        // 坐标映射
-        // MediaPipe (0,0 左上) -> ThreeJS (0,0 中心)
-        // 注意：摄像头是镜像的，x 需要翻转逻辑
-        const x = (1 - tip.x) * 2 - 1; // 修正镜像逻辑: 1-x
-        const y = -(tip.y * 2 - 1);
+        // 坐标映射: [0,1] -> [-1,1] -> 3D世界坐标
+        // 摄像头是镜像的，所以 X 要反转：(1 - x)
+        const ndcX = (1 - tip.x) * 2 - 1; 
+        const ndcY = -(tip.y * 2 - 1);
         
-        // 投影到 z=0 平面
-        // 简单计算：视口宽约等于 z_dist * tan(fov/2) * aspect * 2
-        // 这里直接用经验值映射更跟手
-        const vec = new THREE.Vector3(x * 12, y * 8, 0); // 12和8取决于摄像机距离z=8
+        // 简单的投影估算 (假设 Z=0 平面)
+        // 视口宽度/高度系数根据 Camera Z=10 计算
+        const worldW = 18; // 经验值
+        const worldH = 12; // 经验值
         
-        // 平滑插值，减少抖动
-        handPos.lerp(vec, 0.5);
+        // 平滑插值 (Lerp) 减少抖动
+        const targetX = ndcX * worldW;
+        const targetY = ndcY * worldH;
+        
+        handPos.lerp(new THREE.Vector3(targetX, targetY, 0), 0.5);
         isHandActive = true;
     }
     debugCtx.restore();
 }
 
-// 初始化 MediaPipe Hands
-const hands = new Hands({
-    locateFile: (file) => {
-        // 关键：指定国内镜像地址加载 wasm 和 tflite 模型
-        return `https://npm.elemecdn.com/@mediapipe/hands/${file}`;
-    }
-});
-
-hands.setOptions({
-    maxNumHands: 1,
-    modelComplexity: 1, // 1为中等模型，速度和精度平衡
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5
-});
-
-hands.onResults(onHandResults);
-
-// 启动摄像头
-const cameraUtils = new Camera(videoElement, {
-    onFrame: async () => {
-        await hands.send({image: videoElement});
-    },
-    width: 640,
-    height: 480
-});
-
-cameraUtils.start()
-    .then(() => {
-        document.querySelector('.loading').innerHTML = "✅ 准备就绪";
+// 摄像头启动
+async function startCamera() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { width: 640, height: 480, facingMode: 'user' } 
+        });
+        video.srcObject = stream;
+        await new Promise(r => video.onloadedmetadata = r);
+        video.play();
+        
+        document.querySelector('.loading-text').innerText = "✅ 系统正常";
         setTimeout(initMenu, 1000);
-    })
-    .catch(err => {
-        document.querySelector('.loading').innerHTML = "❌ 摄像头启动失败<br>" + err;
-    });
+        processVideo();
+    } catch (err) {
+        document.querySelector('.loading-text').innerText = "摄像头无法访问";
+    }
+}
+async function processVideo() {
+    if (video.readyState === 4) await hands.send({image: video});
+    requestAnimationFrame(processVideo);
+}
+startCamera();
 
-
-/**
- * 5. 渲染循环
- */
-function animate() {
-    requestAnimationFrame(animate);
-
-    // 屏幕震动逻辑
-    if(screenShake > 0) {
-        camera.position.x = (Math.random() - 0.5) * screenShake;
-        camera.position.y = (Math.random() - 0.5) * screenShake;
-        screenShake *= 0.9; // 衰减
+// --- 11. 主循环 ---
+function loop() {
+    requestAnimationFrame(loop);
+    
+    // 屏幕震动
+    if(shake > 0) {
+        camera.position.x = (Math.random()-0.5)*shake;
+        camera.position.y = (Math.random()-0.5)*shake;
+        shake *= 0.9;
     } else {
-        camera.position.set(0, 0, 8);
+        camera.position.set(0, 0, 10);
     }
 
-    // 更新刀光
-    updateTrail(isHandActive ? handPos : trailPoints[trailPoints.length-1]);
+    // 更新光剑和拖尾 (这是修复的关键)
+    updateBlade();
 
     // 更新物体
-    for(let i=items.length-1; i>=0; i--) {
-        items[i].update();
-        if(!items[i].active) items.splice(i, 1);
+    for(let i=items.length-1; i>=0; i--) { 
+        items[i].update(); 
+        if(!items[i].active) items.splice(i,1); 
     }
-
-    // 更新粒子
-    updateParticles();
+    
+    // 更新爆炸粒子
+    for(let i=particles.length-1; i>=0; i--) {
+        let p = particles[i];
+        p.life -= 0.02;
+        p.mesh.position.add(p.vel);
+        p.mesh.scale.setScalar(p.life);
+        if(p.life <= 0) { scene.remove(p.mesh); particles.splice(i, 1); }
+    }
 
     renderer.render(scene, camera);
 }
 
-// 自适应窗口
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-});
+// 窗口自适应
+window.onresize = () => { 
+    camera.aspect=innerWidth/innerHeight; 
+    camera.updateProjectionMatrix(); 
+    renderer.setSize(innerWidth,innerHeight); 
+};
 
-animate();
+loop();
 
 </script>
 </body>
